@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>경찰 양성 v0.28</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#111827; --card:#1f2937; --text:#e5e7eb;
+    --accent:#60a5fa; --accent2:#34d399; --danger:#ef4444; --warn:#f59e0b;
+    --grid-gap:12px; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:linear-gradient(135deg,#0b1022,#0b1e35 60%,#0b1022);
+    color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  }
+  .wrap{
+    max-width:1100px; margin:0 auto; padding:16px;
+    display:grid; gap:var(--grid-gap);
+    grid-template-columns: 1fr minmax(0,1.2fr) 1fr;
+  }
+  header{
+    grid-column:1 / -1; background:var(--panel); padding:12px 14px; border-radius:var(--radius);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  header .left{display:flex; gap:10px; align-items:center}
+  .badge{background:#0b1224;border:1px solid #1f2b47;color:#9cc2ff;padding:4px 8px;border-radius:999px;font-size:12px}
+  .v{opacity:.8}
+  .btn{
+    border:1px solid #2b364f; background:#10192b; color:#dbeafe; padding:10px 12px; border-radius:10px;
+    cursor:pointer; transition:transform .05s ease, background .15s ease, opacity .2s ease; user-select:none;
+  }
+  .btn:hover{background:#0e213e}
+  .btn:active{transform:translateY(1px)}
+  .btn[disabled]{opacity:.5; cursor:not-allowed}
+  .btn.block{display:block; width:100%}
+  .btn.acc{background:#0e2a4e}
+  .btn.good{background:#0f2e2a; border-color:#24564c}
+  .btn.warn{background:#2a240f; border-color:#5d4b15}
+  .btn.dang{background:#2a0f12; border-color:#5d1521}
+  .card{
+    background:var(--card); border:1px solid #2b364f; border-radius:var(--radius); padding:12px;
+  }
+  .title{font-size:18px; margin:0 0 8px 0}
+  .muted{opacity:.75; font-size:13px}
+  .grid{
+    display:grid; gap:var(--grid-gap);
+    grid-template-columns:1fr;
+  }
+  @media (min-width:840px){
+    .grid-cols-2{grid-template-columns:1fr 1fr}
+  }
+  /* Left / Center / Right columns */
+  .col{display:flex; flex-direction:column; gap:var(--grid-gap)}
+  /* Pills & meters */
+  .pill{display:inline-flex; gap:8px; align-items:center; background:#0d1426; border:1px solid #1f2b47; padding:6px 10px; border-radius:999px; font-size:13px}
+  .hpbar{height:10px; background:#0b1224; border-radius:999px; overflow:hidden; border:1px solid #1e293b}
+  .hpbar>span{display:block; height:100%; background:linear-gradient(90deg,#22d3ee,#10b981); width:100%}
+  .row{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+  .stack{display:flex; flex-direction:column; gap:8px}
+  .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace}
+  /* Sections toggle */
+  .hide{display:none !important}
+  .toast{
+    position:fixed; left:50%; transform:translateX(-50%); bottom:18px;
+    background:#0b1224; border:1px solid #1f2b47; color:#dbeafe; padding:10px 14px; border-radius:10px;
+    opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(-3px)}
+  dialog{
+    border:none; padding:0; border-radius:14px; overflow:hidden; background:#0b1224; color:#dbeafe;
+    border:1px solid #1f2b47; max-width:min(92vw,520px)
+  }
+  dialog::backdrop{background:rgba(2,6,23,.6)}
+  .modal-head{padding:12px 14px; background:#0c162c; border-bottom:1px solid #1f2b47; font-weight:600}
+  .modal-body{padding:14px}
+  .modal-foot{padding:12px 14px; background:#0c162c; border-top:1px solid #1f2b47; display:flex; gap:8px; justify-content:flex-end}
+  .tag{padding:2px 8px; border-radius:999px; border:1px solid #2b364f; background:#0d1426; font-size:12px}
+  .log{max-height:240px; overflow:auto; font-size:13px; line-height:1.5; background:#0c1326; border:1px dashed #253352; border-radius:10px; padding:10px}
+  a.link{color:#93c5fd; text-decoration:none}
+  .hr{height:1px;background:#22304e;margin:8px 0}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="left">
+        <span class="badge">경찰 양성 — 전투 모드</span>
+        <span class="v">v0.28</span>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnHome" onclick="goHome()">⬅️ 메인</button>
+        <button class="btn warn" id="btnQuit" onclick="resign()">의원면직</button>
+      </div>
+    </header>
+
+    <!-- LEFT: 신원/상태 -->
+    <section class="col">
+      <div class="card">
+        <h3 class="title">신원 선택</h3>
+        <p class="muted">선택하지 않은 항목은 무작위로 정해집니다.</p>
+        <div class="grid grid-cols-2">
+          <div class="stack">
+            <label>조직</label>
+            <div class="row" id="orgWrap">
+              <label class="pill"><input type="radio" name="org" value="경찰"> 경찰</label>
+              <label class="pill"><input type="radio" name="org" value="해양경찰"> 해양경찰</label>
+            </div>
+          </div>
+          <div class="stack">
+            <label>성별</label>
+            <div class="row" id="sexWrap">
+              <label class="pill"><input type="radio" name="sex" value="남자"> 남자</label>
+              <label class="pill"><input type="radio" name="sex" value="여자"> 여자</label>
+            </div>
+          </div>
+          <div class="stack">
+            <label>시작 계급</label>
+            <div class="row" id="rankWrap">
+              <label class="pill"><input type="radio" name="rank0" value="의경"> 의경</label>
+              <label class="pill"><input type="radio" name="rank0" value="순경"> 순경</label>
+              <label class="pill"><input type="radio" name="rank0" value="경위"> 경위</label>
+            </div>
+          </div>
+          <div class="stack">
+            <label>이름</label>
+            <input id="nameInput" class="btn block" placeholder="이름 입력(선택)" />
+          </div>
+        </div>
+        <div class="hr"></div>
+        <button class="btn acc block" id="btnStart">시작</button>
+      </div>
+
+      <div class="card" id="statusCard" aria-live="polite">
+        <h3 class="title">상태</h3>
+        <div class="stack">
+          <div class="row">
+            <span id="rankTxt" class="tag">—</span>
+            <span id="orgTxt" class="tag">—</span>
+            <span id="sexTxt" class="tag">—</span>
+            <span id="yearTxt" class="tag">연차 0</span>
+            <span id="cashTxt" class="tag">💰 0</span>
+            <span id="kitTxt" class="tag">🧰 구급함 0</span>
+          </div>
+          <div>
+            <div class="row" style="justify-content:space-between">
+              <div>❤️ 체력 <span id="hpLabel">50/50</span></div>
+              <div class="mono" id="weaponLabel">무기: 없음</div>
+            </div>
+            <div class="hpbar" aria-hidden="true"><span id="hpBar" style="width:100%"></span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CENTER: 전투 -->
+    <section class="col">
+      <div class="card" id="battleCard">
+        <h3 class="title">⚔️ 적 정보</h3>
+        <div class="row">
+          <span id="enemyName" class="tag">—</span>
+          <span class="tag">체력 <span id="enemyHP">—</span></span>
+        </div>
+        <div class="hr"></div>
+
+        <div class="grid grid-cols-2">
+          <button class="btn block" id="btnRoll">🎲 굴리기</button>
+          <button class="btn block" id="btnBaton">🪄 삼단봉 (1)</button>
+          <button class="btn block" id="btnShoot">🔫 격발 (무기)</button>
+          <button class="btn block" id="btnSwap">🔁 무기변환</button>
+        </div>
+
+        <div class="stack" id="suppressing" style="margin-top:8px">
+          <div class="title" style="font-size:16px">⚔️ 제압 중...</div>
+          <div class="grid grid-cols-2">
+            <div class="card">
+              <div class="muted">나</div>
+              <div class="mono" id="myLast">—</div>
+            </div>
+            <div class="card">
+              <div class="muted">적</div>
+              <div class="mono" id="enemyLast">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2" style="margin-top:8px">
+          <button class="btn good block" id="btnMedUse">❤️+30 (턴 소요)</button>
+          <button class="btn acc block hide" id="btnAfterOpen">✅ 제압 완료! 애프터 열기</button>
+        </div>
+      </div>
+
+      <div class="card hide" id="endingCard">
+        <h3 class="title">## 엔딩</h3>
+        <div id="endingText" class="stack"></div>
+        <div class="hr"></div>
+        <button class="btn block" onclick="resetGame()">신원 선택으로</button>
+      </div>
+    </section>
+
+    <!-- RIGHT: 애프터 & 상점 & 기록 -->
+    <section class="col">
+      <div class="card" id="afterCard">
+        <h3 class="title">애프터</h3>
+        <div class="grid grid-cols-2">
+          <button class="btn block" id="btnWash">🧼 씻고 출근</button>
+          <button class="btn block" id="btnMedBuy">🧰 구급함 (5)</button>
+          <button class="btn block" id="btnMedUse2">🩹 사용 (❤️+30)</button>
+          <button class="btn block" id="btnPromo">️🎖️ 승진도전</button>
+        </div>
+        <p class="muted" style="margin-top:8px">※ 제압 완료 후에만 연차 +4개월.</p>
+      </div>
+
+      <div class="card" id="shopCard">
+        <h3 class="title">무기 구매 (영구)</h3>
+        <div class="grid grid-cols-2">
+          <button class="btn block" data-weapon="22LR" data-cost="10">22lr 권총 (10)</button>
+          <button class="btn block" data-weapon="9MM" data-cost="20">9mm 권총 (20)</button>
+          <button class="btn block" data-weapon="SHOTGUN" data-cost="35">엽총 (35)</button>
+          <button class="btn block" data-weapon="TAZER" data-cost="50">테이저건 (50)</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="title">이력 & 로그</h3>
+        <div class="log" id="logBox"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 승진 모달 -->
+  <dialog id="promoDlg">
+    <div class="modal-head">🎖️ 승진 도전</div>
+    <div class="modal-body">
+      <div class="stack">
+        <div>주사위 2개 합이 <b id="needReq">—</b> 이상이면 승진</div>
+        <div class="row mono"><span id="diceShow">🎲 —</span></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btnRollPromo">주사위 굴리기</button>
+      <button class="btn" onclick="closePromo()">취소</button>
+    </div>
+  </dialog>
+
+  <!-- 알림 모달 -->
+  <dialog id="alertDlg">
+    <div class="modal-head">알림</div>
+    <div class="modal-body" id="alertMsg">—</div>
+    <div class="modal-foot"><button class="btn" onclick="closeAlert()">확인</button></div>
+  </dialog>
+
+  <div class="toast" id="toast">저장됨</div>
+
+<script>
+(function(){
+  const STATE = {
+    started:false, locking:false,
+    name:"", org:"", sex:"", rank:"—", year:0, cash:0, kit:0,
+    hp:50, hpMax:50, weapon:null, // weapon: null | 22LR | 9MM | SHOTGUN | TAZER
+    enemy:null, afterOpen:false, logs:[], ended:false
+  };
+
+  const RANKS = ["의경","순경","경장","경사","경위","경감","경정","치안총감"];
+  const PROMO_BASE_REQ = { // 요구치(2d6) 기본 난이도
+    "의경":"6","순경":"7","경장":"8","경사":"9","경위":"10","경감":"10","경정":"11"
+  };
+
+  // --- utils ---
+  const $ = sel=>document.querySelector(sel);
+  const $$ = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
+  const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
+  const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+  const log=(t)=>{ STATE.logs.unshift("• "+t); renderLogs(); };
+  const toast=(t)=>{ const el=$("#toast"); el.textContent=t; el.classList.add("show"); setTimeout(()=>el.classList.remove("show"),1600); };
+  const alertMsg=(t)=>{ $("#alertMsg").textContent=t; $("#alertDlg").showModal(); };
+  const closeAlert=()=>$("#alertDlg").close();
+  window.closeAlert=closeAlert;
+
+  // --- navigation placeholders ---
+  window.goHome = () => { alertMsg("GitHub Pages에서는 index.html에 연결하세요."); };
+  window.resign = () => {
+    if(!STATE.started || STATE.ended) return;
+    endWith("의원면직","의원면직 처리되었습니다. 경력 이력에 기록합니다.");
+  };
+
+  // --- start / reset ---
+  const autoPick = (name, opts)=> (opts.find(o=>o.checked)?.value) || (opts[rand(0,opts.length-1)].value);
+  const resetEnemy = ()=>{
+    STATE.enemy = { name:["불량배","폭주자","절도범","난동자","해상통행위반자"][rand(0,4)], hp: rand(18,28) };
+  };
+  const resetGame = ()=>{
+    STATE.started=false; STATE.locking=false; STATE.afterOpen=false; STATE.ended=false;
+    STATE.name=""; STATE.org=""; STATE.sex=""; STATE.rank="—"; STATE.year=0; STATE.cash=0; STATE.kit=0;
+    STATE.hpMax=50; STATE.hp=50; STATE.weapon=null; STATE.logs=[];
+    resetEnemy(); renderAll();
+  };
+  window.resetGame = resetGame;
+
+  // Initial
+  resetEnemy(); renderAll();
+
+  // --- rendering ---
+  function renderAll(){
+    // identity/status
+    $("#rankTxt").textContent = STATE.rank;
+    $("#orgTxt").textContent = STATE.org || "—";
+    $("#sexTxt").textContent = STATE.sex || "—";
+    $("#yearTxt").textContent = `연차 ${STATE.year}`;
+    $("#cashTxt").textContent = `💰 ${STATE.cash}`;
+    $("#kitTxt").textContent = `🧰 구급함 ${STATE.kit}`;
+    $("#hpLabel").textContent = `${STATE.hp}/${STATE.hpMax}`;
+    $("#hpBar").style.width = `${(STATE.hp/STATE.hpMax)*100}%`;
+    $("#weaponLabel").textContent = `무기: ${STATE.weapon?STATE.weapon:"없음"}`;
+
+    // enemy
+    $("#enemyName").textContent = STATE.enemy?.name ?? "—";
+    $("#enemyHP").textContent = STATE.enemy? `${STATE.enemy.hp}`: "—";
+
+    // after / ending
+    $("#btnAfterOpen").classList.toggle("hide", !STATE.afterOpen);
+    $("#endingCard").classList.toggle("hide", !STATE.ended);
+    $("#battleCard").classList.toggle("hide", STATE.ended);
+
+    // buttons enable
+    const inBattle = STATE.started && !STATE.afterOpen && !STATE.ended;
+    ["#btnRoll","#btnBaton","#btnShoot","#btnSwap","#btnMedUse"].forEach(id=>{
+      $(id).disabled = !inBattle || STATE.locking;
+    });
+    $("#btnQuit").disabled = !STATE.started || STATE.ended;
+
+    // start button
+    $("#btnStart").disabled = STATE.started;
+  }
+  function renderLogs(){
+    $("#logBox").innerHTML = STATE.logs.join("<br>");
+  }
+
+  // --- start click ---
+  $("#btnStart").addEventListener("click", ()=>{
+    const org = autoPick("org", $$("input[name=org]"));
+    const sex = autoPick("sex", $$("input[name=sex]"));
+    const rank0 = autoPick("rank0", $$("input[name=rank0]"));
+    const name = $("#nameInput").value.trim() || ["홍길동","김민재","정세라","박하늘","이담"][rand(0,4)];
+
+    STATE.org = org; STATE.sex = sex; STATE.rank = rank0; STATE.name = name;
+    STATE.started = true; STATE.afterOpen=false; STATE.ended=false;
+    STATE.hpMax = 50; STATE.hp = 50; STATE.cash = 0; STATE.kit = 0; STATE.year = 0;
+    STATE.weapon = null; resetEnemy();
+    log(`시작: ${STATE.org} ${STATE.rank} ${STATE.name} (${STATE.sex})`);
+    renderAll();
+    toast("게임 시작");
+  });
+
+  // --- battle loop helpers ---
+  function lock(ms=300){
+    STATE.locking = true; renderAll();
+    return new Promise(r=>setTimeout(()=>{ STATE.locking=false; renderAll(); r(); }, ms));
+  }
+  function takeDamage(n){
+    STATE.hp = clamp(STATE.hp - n, 0, STATE.hpMax);
+    $("#myLast").textContent = `피해 ${n}, 체력 ${STATE.hp}/${STATE.hpMax}`;
+    if(STATE.hp<=0){ endWith("순직","체력이 0 이하가 되어 전투 불능. 순직 처리됩니다."); }
+  }
+  function enemyTurn(){
+    if(STATE.ended) return;
+    const d = rand(1,6)+rand(1,6);
+    let dmg = Math.max(1, Math.floor(d/2));
+    takeDamage(dmg);
+  }
+  function endWith(type, text){
+    STATE.ended = true;
+    const box = $("#endingText");
+    box.innerHTML = `<div class="stack"><div class="title">${type}</div><div>${text}</div></div>`;
+    log(`엔딩: ${type}`);
+    renderAll();
+  }
+
+  // --- actions ---
+  $("#btnRoll").addEventListener("click", async ()=>{
+    if(!STATE.started || STATE.afterOpen || STATE.ended) return;
+    await lock(300);
+    const my = rand(1,6)+rand(1,6);
+    const en = rand(1,6)+rand(1,6);
+    const dealt = Math.max(1, my - 2); // 기본 피해
+    STATE.enemy.hp = clamp(STATE.enemy.hp - dealt, 0, 999);
+    $("#myLast").textContent = `주사위 ${my}, 가한 피해 ${dealt}`;
+    $("#enemyLast").textContent = `주사위 ${en}`;
+    if(STATE.enemy.hp<=0){
+      STATE.afterOpen = true;
+      $("#btnAfterOpen").classList.remove("hide");
+      log(`제압 완료: ${STATE.enemy.name}`);
+    }else{
+      enemyTurn();
+    }
+    renderAll();
+  });
+
+  $("#btnBaton").addEventListener("click", async ()=>{
+    if(!STATE.started || STATE.afterOpen || STATE.ended) return;
+    await lock(300);
+    const dealt = 1; // 고정 1
+    STATE.enemy.hp = clamp(STATE.enemy.hp - dealt, 0, 999);
+    $("#myLast").textContent = `삼단봉 타격, 피해 ${dealt}`;
+    $("#enemyLast").textContent = `반격 대기`;
+    if(STATE.enemy.hp<=0){
+      STATE.afterOpen = true;
+      log(`제압 완료: ${STATE.enemy.name}`);
+    }else enemyTurn();
+    renderAll();
+  });
+
+  $("#btnShoot").addEventListener("click", async ()=>{
+    if(!STATE.started || STATE.afterOpen || STATE.ended) return;
+    await lock(300);
+    const w = STATE.weapon;
+    if(!w){ alertMsg("무기가 없습니다. 상점에서 구매하세요."); return; }
+    const base = { "22LR":[2,5], "9MM":[3,7], "SHOTGUN":[4,9], "TAZER":[0,0] }[w];
+    if(w==="TAZER"){
+      // 테이저: 적 다음 공격 0, 즉시 제압 게이지 대폭
+      const dealt = rand(3,6);
+      STATE.enemy.hp = clamp(STATE.enemy.hp - dealt, 0, 999);
+      $("#myLast").textContent=`테이저 사용, 피해 ${dealt} & 적 공격 무효`;
+      $("#enemyLast").textContent=`감전으로 행동불가`;
+      if(STATE.enemy.hp<=0){ STATE.afterOpen=true; log(`제압 완료: ${STATE.enemy.name}`); }
+      renderAll(); return; // 적 턴 없음
+    }
+    const dealt = rand(base[0], base[1]);
+    STATE.enemy.hp = clamp(STATE.enemy.hp - dealt, 0, 999);
+    $("#myLast").textContent = `${w} 사격, 피해 ${dealt}`;
+    if(STATE.enemy.hp<=0){ STATE.afterOpen=true; log(`제압 완료: ${STATE.enemy.name}`); renderAll(); return; }
+    enemyTurn(); renderAll();
+  });
+
+  $("#btnSwap").addEventListener("click", ()=>{
+    if(!STATE.started || STATE.afterOpen || STATE.ended) return;
+    const order=[null,"22LR","9MM","SHOTGUN","TAZER"];
+    const idx = (order.indexOf(STATE.weapon)+1) % order.length;
+    STATE.weapon = order[idx];
+    toast(`무기변환: ${STATE.weapon??"없음"}`); renderAll();
+  });
+
+  // 구급함: 전투 중 사용 시 내 턴 소요 & 적 공격만 허용
+  $("#btnMedUse").addEventListener("click", async ()=>{
+    if(!STATE.started || STATE.afterOpen || STATE.ended) return;
+    if(STATE.kit<=0){ alertMsg("구급함이 없습니다."); return; }
+    await lock(300);
+    STATE.kit--; heal(30); $("#myLast").textContent=`구급 처치 +30`;
+    enemyTurn(); renderAll();
+  });
+
+  function heal(n){ STATE.hp = clamp(STATE.hp + n, 0, STATE.hpMax); }
+
+  // 애프터
+  $("#btnAfterOpen").addEventListener("click", ()=>{
+    if(!STATE.afterOpen) return;
+    // 연차 +4개월(0.3333년)
+    STATE.year = +(STATE.year + 0.33).toFixed(2);
+    STATE.cash += 3; // 사건 처리 소정의 수당
+    log(`애프터 오픈: 연차 +0.33, 💰+3`);
+    renderAll();
+  });
+
+  $("#btnWash").addEventListener("click", ()=>{
+    if(!STATE.afterOpen) { alertMsg("제압 완료 후 가능합니다."); return; }
+    // 다음 사건
+    heal(10);
+    resetEnemy(); STATE.afterOpen=false;
+    log("씻고 출근: 체력 +10, 다음 사건으로");
+    renderAll();
+  });
+
+  $("#btnMedBuy").addEventListener("click", ()=>{
+    if(!STATE.afterOpen) { alertMsg("제압 완료 후 가능합니다."); return; }
+    if(STATE.cash<5){ alertMsg("자금이 부족합니다."); return; }
+    STATE.cash -= 5; STATE.kit += 1; renderAll(); toast("구급함 +1");
+  });
+  $("#btnMedUse2").addEventListener("click", ()=>{
+    if(!STATE.afterOpen){ alertMsg("제압 완료 후 가능합니다."); return; }
+    if(STATE.kit<=0){ alertMsg("구급함이 없습니다."); return; }
+    STATE.kit--; heal(30); renderAll(); toast("체력 +30");
+  });
+
+  // 상점(영구 무기)
+  $("#shopCard").addEventListener("click", (e)=>{
+    const btn = e.target.closest("button[data-weapon]");
+    if(!btn) return;
+    const w = btn.dataset.weapon, cost = +btn.dataset.cost;
+    if(STATE.cash < cost){ alertMsg("자금이 부족합니다."); return; }
+    STATE.cash -= cost; STATE.weapon = w;
+    log(`무기 구매: ${w} (-${cost})`);
+    renderAll();
+  });
+
+  // 승진 도전: 요구치는 모달에서만 노출
+  const promoDlg = $("#promoDlg");
+  $("#btnPromo").addEventListener("click", ()=>{
+    if(!STATE.afterOpen){ alertMsg("제압 완료 후 가능합니다."); return; }
+    const need = PROMO_BASE_REQ[STATE.rank] ?? "10";
+    $("#needReq").textContent = need;
+    $("#diceShow").textContent = "🎲 —";
+    promoDlg.showModal();
+  });
+  window.closePromo = ()=>promoDlg.close();
+
+  $("#btnRollPromo").addEventListener("click", ()=>{
+    const need = +($("#needReq").textContent);
+    const d = rand(1,6)+rand(1,6);
+    $("#diceShow").textContent = `🎲 ${d} (요구 ${need}+)`;
+    if(d>=need){
+      // 승진
+      const idx = Math.min(RANKS.indexOf(STATE.rank)+1, RANKS.length-1);
+      const from = STATE.rank, to = RANKS[idx];
+      STATE.rank = to; log(`승진: ${from} → ${to}`);
+      toast(`승진: ${to}`);
+      promoDlg.close();
+    }else{
+      toast("승진 실패");
+    }
+    renderAll();
+  });
+
+  // 과잉진압 페널티 예시(선택): 적 체력이 음수로 떨어질 수 있는 구간 제거했음(0에서 컷)
+  // HP 0 이하 엔딩은 takeDamage()에서 처리
+
+  // 접근성 보조
+  $("#alertDlg").addEventListener("close", ()=>$("#alertMsg").textContent="—");
+})();
+</script>
+</body>
+</html>
